@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analysis - CEPC Analysis Copilot</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-brand">
+      <span class="icon">⚛</span>
+      CEPC Analysis Copilot
+    </div>
+    <ul class="nav-links">
+      <li><a href="/">Dashboard</a></li>
+      <li><a href="/analyses/" class="active">Analyses</a></li>
+      <li><a href="/literature">Literature</a></li>
+      <li><a href="/api/health">API</a></li>
+    </ul>
+    <div class="nav-status">
+      <span class="status-dot"></span>
+      <span>Online</span>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Analysis Runs</h1>
+      <p>6-phase HEP analysis pipeline with AI agent orchestration</p>
+    </div>
+
+    <!-- Create Analysis -->
+    <div class="card" style="margin-bottom: 2rem;">
+      <div class="card-header">
+        <span>New Analysis</span>
+      </div>
+      <div class="card-body">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label>Analysis Name</label>
+            <input type="text" id="analysis-name" placeholder="H->ZZ 4-lepton measurement">
+          </div>
+          <div class="form-group">
+            <label>Physics Channel</label>
+            <select id="analysis-channel">
+              <option value="HZZ_4l">H->ZZ*->4l (4e, 4mu, 2e2mu)</option>
+              <option value="Hgg">H->gg</option>
+              <option value="HWW">H->WW*->lvlv</option>
+              <option value="Htt">H->tautau</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Dataset ID</label>
+          <input type="text" id="analysis-dataset" placeholder="ds_hzz_10k_001">
+        </div>
+        <button class="btn btn-primary"
+                hx-post="/api/v1/analyses"
+                hx-include="#analysis-name, #analysis-channel, #analysis-dataset"
+                hx-target="#create-result"
+                hx-indicator="#create-spinner">
+          Create Analysis
+          <span class="htmx-indicator" id="create-spinner">⏳</span>
+        </button>
+        <div id="create-result" style="margin-top: 1rem;"></div>
+      </div>
+    </div>
+
+    <!-- Analysis List -->
+    <div class="card">
+      <div class="card-header">
+        <span>All Analyses</span>
+        <button class="btn btn-sm btn-secondary"
+                hx-get="/api/v1/analyses"
+                hx-target="#analysis-list"
+                hx-trigger="load, every 5s">
+          Refresh
+        </button>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Channel</th>
+                <th>Phase</th>
+                <th>Status</th>
+                <th>Significance</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="analysis-list">
+              <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading analyses...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.body.addEventListener('htmx:configRequest', (e) => {
+      if (e.detail.elt.matches('[hx-post*="analyses"]') && !e.detail.elt.matches('[hx-post*="run"]')) {
+        e.detail.headers['Content-Type'] = 'application/json';
+        e.detail.body = JSON.stringify({
+          dataset_id: document.getElementById('analysis-dataset').value,
+          name: document.getElementById('analysis-name').value,
+          channel: document.getElementById('analysis-channel').value,
+          systematics: ['jet_energy_scale', 'btag_efficiency', 'lepton_id']
+        });
+      }
+    });
+
+    document.body.addEventListener('htmx:afterOnLoad', (e) => {
+      const target = e.detail.target;
+      if (target.id === 'analysis-list') {
+        try {
+          const data = JSON.parse(target.textContent);
+          const analyses = data.analyses || [];
+          if (analyses.length === 0) {
+            target.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">No analyses yet. Create one above.</td></tr>';
+            return;
+          }
+          let html = '';
+          analyses.forEach(a => {
+            const statusBadge = a.status === 'completed' ? 'badge-success' :
+                                a.status === 'running' ? 'badge-warning' :
+                                a.status === 'failed' ? 'badge-danger' : 'badge-info';
+            const sig = a.significance ? a.significance.toFixed(1) + 'σ' : '--';
+            html += '<tr>' +
+              '<td><strong>' + (a.name || 'Untitled') + '</strong><br><small style="color: var(--text-muted);">' + a.analysis_id + '</small></td>' +
+              '<td>' + (a.channel || '--') + '</td>' +
+              '<td>Phase ' + (a.current_phase || 0) + '/6</td>' +
+              '<td><span class="badge ' + statusBadge + '">' + a.status + '</span></td>' +
+              '<td>' + sig + '</td>' +
+              '<td>' + new Date(a.created_at).toLocaleDateString() + '</td>' +
+              '<td>' +
+                (a.status === 'created' ? '<button class="btn btn-sm btn-primary" onclick="runAnalysis(\'' + a.analysis_id + '\')">Run Pipeline</button>' : '') +
+                '<a href="/api/v1/analyses/' + a.analysis_id + '" class="btn btn-sm btn-secondary" style="margin-left: 0.25rem;">Details</a>' +
+              '</td></tr>';
+          });
+          target.innerHTML = html;
+        } catch(e) {}
+      }
+      if (target.id === 'create-result') {
+        try {
+          const data = JSON.parse(target.textContent);
+          if (data.analysis_id) {
+            target.innerHTML = '<div class="alert alert-success">Analysis created: ' + data.analysis_id + '</div>';
+            setTimeout(() => location.reload(), 1000);
+          } else if (data.error) {
+            target.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+          }
+        } catch(e) {}
+      }
+    });
+
+    function runAnalysis(id) {
+      fetch('/api/v1/analyses/' + id + '/run', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+          alert(d.message || d.error);
+          setTimeout(() => location.reload(), 1500);
+        });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+services:
+  # PostgreSQL with pgvector
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: cepc
+      POSTGRES_PASSWORD: cepc_secret
+      POSTGRES_DB: cepc_copilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cepc"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Redis for caching and task queue
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # CEPC Analysis Copilot (Go + Python)
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      GIN_MODE: "release"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: cepc
+      DB_PASSWORD: cepc_secret
+      DB_NAME: cepc_copilot
+      REDIS_URL: redis://redis:6379/0
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      ARXIV_BASE_URL: http://export.arxiv.org/api/query
+      INSPIRE_BASE_URL: https://inspirehep.net/api
+      DATA_DIR: /app/data
+      CACHE_DIR: /app/cache
+      PLOT_OUTPUT_DIR: /app/cache/plots
+      PYTHON_PATH: ./python
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+      - ./cache:/app/cache
+
+volumes:
+  pgdata:

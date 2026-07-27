@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CEPC Analysis Copilot</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-brand">
+      <span class="icon">⚛</span>
+      CEPC Analysis Copilot
+    </div>
+    <ul class="nav-links">
+      <li><a href="/" class="active">Dashboard</a></li>
+      <li><a href="/analyses/">Analyses</a></li>
+      <li><a href="/literature">Literature</a></li>
+      <li><a href="/api/health">API</a></li>
+    </ul>
+    <div class="nav-status">
+      <span class="status-dot"></span>
+      <span id="health-status">Connecting...</span>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Dashboard</h1>
+      <p>AI-powered HEP analysis pipeline for the Circular Electron Positron Collider</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="label">Datasets</div>
+        <div class="value" id="stat-datasets">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Analyses</div>
+        <div class="value" id="stat-analyses">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Papers Indexed</div>
+        <div class="value" id="stat-papers">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Plots Generated</div>
+        <div class="value" id="stat-plots">--</div>
+      </div>
+    </div>
+
+    <!-- Pipeline Status -->
+    <div class="card" style="margin-bottom: 2rem;">
+      <div class="card-header">
+        <span>6-Phase Pipeline</span>
+        <span class="badge badge-info">Architecture</span>
+      </div>
+      <div class="card-body">
+        <div class="pipeline">
+          <div class="pipeline-phase">
+            <div class="phase-circle" id="phase-1">1</div>
+            <div class="phase-label">Data Ingest</div>
+          </div>
+          <div class="phase-connector"></div>
+          <div class="pipeline-phase">
+            <div class="phase-circle" id="phase-2">2</div>
+            <div class="phase-label">Reconstruction</div>
+          </div>
+          <div class="phase-connector"></div>
+          <div class="pipeline-phase">
+            <div class="phase-circle" id="phase-3">3</div>
+            <div class="phase-label">Selection</div>
+          </div>
+          <div class="phase-connector"></div>
+          <div class="pipeline-phase">
+            <div class="phase-circle" id="phase-4">4</div>
+            <div class="phase-label">Statistics</div>
+          </div>
+          <div class="phase-connector"></div>
+          <div class="pipeline-phase">
+            <div class="phase-circle" id="phase-5">5</div>
+            <div class="phase-label">Visualization</div>
+          </div>
+          <div class="phase-connector"></div>
+          <div class="pipeline-phase">
+            <div class="phase-circle" id="phase-6">6</div>
+            <div class="phase-label">Review</div>
+          </div>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem;">
+          Agents: Data, Analysis, Literature, Visualization, Statistics, Review
+        </p>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem;">
+      <div class="card">
+        <div class="card-header">
+          <span>Ingest Dataset</span>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Dataset Name</label>
+            <input type="text" id="ds-name" placeholder="e.g. Higgs_ZZ_10k">
+          </div>
+          <div class="form-group">
+            <label>File Path</label>
+            <input type="text" id="ds-path" placeholder="/data/cepc/sim/higgs_zz.root">
+          </div>
+          <div class="form-group">
+            <label>Format</label>
+            <select id="ds-format">
+              <option value="root">ROOT</option>
+              <option value="nanoaod">nanoAOD</option>
+              <option value="parquet">Parquet</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" hx-post="/api/v1/datasets/ingest"
+                  hx-include="#ds-name, #ds-path, #ds-format"
+                  hx-target="#ingest-result"
+                  hx-swap="innerHTML"
+                  hx-indicator="#ingest-spinner">
+            Ingest Dataset
+            <span class="htmx-indicator" id="ingest-spinner">⏳</span>
+          </button>
+          <div id="ingest-result" style="margin-top: 1rem;"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span>Search Literature</span>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Query</label>
+            <input type="text" id="lit-query" placeholder="e.g. Higgs to four leptons CEPC 240 GeV">
+          </div>
+          <button class="btn btn-primary" hx-get="/api/v1/literature/search"
+                  hx-params="js:{q: document.getElementById('lit-query').value}"
+                  hx-target="#lit-results"
+                  hx-swap="innerHTML"
+                  hx-indicator="#lit-spinner">
+            Search arXiv + INSPIRE
+            <span class="htmx-indicator" id="lit-spinner">⏳</span>
+          </button>
+          <div id="lit-results" style="margin-top: 1rem;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="card">
+      <div class="card-header">
+        <span>Recent Agent Activity</span>
+        <button class="btn btn-sm btn-secondary"
+                hx-get="/api/v1/logs"
+                hx-target="#agent-logs"
+                hx-trigger="load, every 10s">
+          Refresh
+        </button>
+      </div>
+      <div class="card-body">
+        <div id="agent-logs">
+          <p style="color: var(--text-muted);">Loading agent logs...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Health check on load
+    fetch('/api/health')
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('health-status').textContent = 'Healthy';
+      })
+      .catch(() => {
+        document.getElementById('health-status').textContent = 'Offline';
+      });
+
+    // HTMX: customize ingest request to send JSON
+    document.body.addEventListener('htmx:configRequest', (e) => {
+      if (e.detail.elt.matches('[hx-post*="ingest"]')) {
+        e.detail.headers['Content-Type'] = 'application/json';
+        e.detail.body = JSON.stringify({
+          name: document.getElementById('ds-name').value,
+          file_path: document.getElementById('ds-path').value,
+          format: document.getElementById('ds-format').value,
+          process: 'e+e- > HZZ',
+          energy: '240 GeV',
+          generator: 'Whizard 2.8.4'
+        });
+      }
+    });
+
+    // Handle ingest/HTMX responses
+    document.body.addEventListener('htmx:afterOnLoad', (e) => {
+      const target = e.detail.target;
+      if (target.id === 'ingest-result' || target.id === 'lit-results') {
+        try {
+          const data = JSON.parse(target.textContent);
+          if (data.dataset_id || data.results) {
+            target.innerHTML = '<div class="alert alert-success">Success! ' +
+              (data.dataset_id || data.total_matching + ' papers found') + '</div>';
+          } else if (data.error) {
+            target.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+          }
+        } catch(e) {}
+      }
+      if (target.id === 'agent-logs') {
+        try {
+          const data = JSON.parse(target.textContent);
+          renderAgentLogs(data.logs || []);
+        } catch(e) {}
+      }
+    });
+
+    function renderAgentLogs(logs) {
+      if (!logs.length) {
+        document.getElementById('agent-logs').innerHTML =
+          '<p style="color: var(--text-muted);">No agent activity yet.</p>';
+        return;
+      }
+      let html = '<div class="agent-timeline">';
+      logs.slice(0, 10).forEach(log => {
+        const statusClass = log.status === 'success' ? 'completed' :
+                            log.status === 'failed' ? 'error' : 'active';
+        const dur = log.duration_ms ? (log.duration_ms / 1000).toFixed(1) + 's' : '';
+        html += '<div class="timeline-entry">' +
+          '<div class="agent-name">' + log.agent_id + '</div>' +
+          '<div class="duration">Phase ' + log.phase + (dur ? ' · ' + dur : '') + '</div>' +
+          '<div style="color: var(--text-muted); font-size: 0.85rem;">' + log.message + '</div>' +
+          '</div>';
+      });
+      html += '</div>';
+      document.getElementById('agent-logs').innerHTML = html;
+    }
+  </script>
+</body>
+</html>

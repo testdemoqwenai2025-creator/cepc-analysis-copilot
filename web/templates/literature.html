@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Literature - CEPC Analysis Copilot</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-brand">
+      <span class="icon">⚛</span>
+      CEPC Analysis Copilot
+    </div>
+    <ul class="nav-links">
+      <li><a href="/">Dashboard</a></li>
+      <li><a href="/analyses/">Analyses</a></li>
+      <li><a href="/literature" class="active">Literature</a></li>
+      <li><a href="/api/health">API</a></li>
+    </ul>
+    <div class="nav-status">
+      <span class="status-dot"></span>
+      <span>Online</span>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Literature Layer</h1>
+      <p>Real-time arXiv monitoring and INSPIRE-HEP integration for HEP analysis</p>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="label">Papers Indexed</div>
+        <div class="value" id="stat-papers">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Last Harvest</div>
+        <div class="value" id="stat-harvest" style="font-size: 1rem;">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Categories</div>
+        <div class="value" style="font-size: 1rem;">hep-ex, hep-ph</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Embedding Model</div>
+        <div class="value" id="stat-embedder" style="font-size: 1rem;">--</div>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div class="card" style="margin-bottom: 2rem;">
+      <div class="card-header">
+        <span>Semantic Search</span>
+        <button class="btn btn-sm btn-secondary"
+                hx-post="/api/v1/literature/monitor"
+                hx-target="#harvest-result">Trigger arXiv Harvest</button>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Search Query (natural language)</label>
+          <input type="text" id="search-query" placeholder="CEPC Higgs precision measurement at 240 GeV with full simulation">
+        </div>
+        <button class="btn btn-primary" onclick="doSearch()">
+          Search Papers
+          <span class="htmx-indicator" id="search-spinner">⏳</span>
+        </button>
+        <div id="search-results" style="margin-top: 1rem;"></div>
+        <div id="harvest-result" style="margin-top: 1rem;"></div>
+      </div>
+    </div>
+
+    <!-- Paper List -->
+    <div class="card">
+      <div class="card-header">
+        <span>Indexed Papers</span>
+        <button class="btn btn-sm btn-secondary"
+                hx-get="/api/v1/literature/papers"
+                hx-target="#paper-list"
+                hx-trigger="load, every 30s">
+          Refresh
+        </button>
+      </div>
+      <div class="card-body">
+        <div id="paper-list">
+          <p style="color: var(--text-muted);">Loading papers...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function doSearch() {
+      const q = document.getElementById('search-query').value;
+      if (!q) return;
+      document.getElementById('search-results').innerHTML = '<div class="alert alert-info">Searching arXiv & INSPIRE-HEP...</div>';
+      fetch('/api/v1/literature/search?q=' + encodeURIComponent(q))
+        .then(r => r.json())
+        .then(data => {
+          const results = data.results || [];
+          if (!results.length) {
+            document.getElementById('search-results').innerHTML = '<div class="alert alert-warning">No papers found.</div>';
+            return;
+          }
+          let html = '<div class="alert alert-success">' + (data.total_matching || results.length) + ' papers found</div>';
+          results.forEach(p => {
+            html += '<div class="card" style="margin-bottom: 0.75rem;">' +
+              '<div class="card-body" style="padding: 1rem;">' +
+              '<strong>' + p.title + '</strong><br>' +
+              '<small style="color: var(--text-muted);">' + (p.authors || []).join(', ') + '</small><br>' +
+              '<span class="badge badge-info" style="margin-top: 0.5rem;">' + p.arxiv_id + '</span>' +
+              (p.summary ? '<p style="margin-top: 0.5rem; font-size: 0.9rem;">' + (p.summary.length > 200 ? p.summary.substring(0,200) + '...' : p.summary) + '</p>' : '') +
+              '</div></div>';
+          });
+          document.getElementById('search-results').innerHTML = html;
+        })
+        .catch(e => {
+          document.getElementById('search-results').innerHTML = '<div class="alert alert-danger">Search failed: ' + e.message + '</div>';
+        });
+    }
+
+    document.body.addEventListener('htmx:afterOnLoad', (e) => {
+      if (e.detail.target.id === 'paper-list') {
+        try {
+          const data = JSON.parse(e.detail.target.textContent);
+          const papers = data.papers || [];
+          if (!papers.length) {
+            e.detail.target.innerHTML = '<p style="color: var(--text-muted);">No papers indexed yet. Run a search or trigger a harvest.</p>';
+            return;
+          }
+          let html = '';
+          papers.forEach(p => {
+            html += '<div style="padding: 0.75rem 0; border-bottom: 1px solid var(--border);">' +
+              '<strong>' + p.title + '</strong><br>' +
+              '<small style="color: var(--text-muted);">' + (p.authors || []).join(', ') + '</small> ' +
+              '<span class="badge badge-info">' + p.arxiv_id + '</span>' +
+              '</div>';
+          });
+          e.detail.target.innerHTML = html;
+        } catch(e) {}
+      }
+      if (e.detail.target.id === 'harvest-result') {
+        try {
+          const data = JSON.parse(e.detail.target.textContent);
+          e.detail.target.innerHTML = '<div class="alert alert-success">Harvest complete: ' + (data.new_papers || 0) + ' new papers</div>';
+        } catch(e) {}
+      }
+    });
+  </script>
+</body>
+</html>

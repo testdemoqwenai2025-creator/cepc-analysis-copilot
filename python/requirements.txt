@@ -1,0 +1,10 @@
+uproot>=5.3
+awkward>=2.6
+numpy>=1.26
+pandas>=2.2
+matplotlib>=3.9
+scipy>=1.14
+plotly>=5.24
+scikit-learn>=1.5
+requests>=2.32
+pyarrow>=17.0
