@@ -32,10 +32,20 @@
     </div>
 
     <!-- Stats -->
+    <!-- HIAF Launch Banner -->
+    <div class="alert alert-info" style="margin-bottom: 2rem;">
+      <strong>HIAF is now operational</strong> — China's $384M heavy-ion accelerator in Huizhou produced its first beam in Oct 2025 and began science operations in July 2026. 8x world-record beam intensity. This copilot supports both <strong>CEPC</strong> and <strong>HIAF</strong> analysis workflows.
+      <a href="https://interestingengineering.com/science/china-kick-starts-heavy-ion-accelerator" target="_blank" style="margin-left: 0.5rem;">Read more →</a>
+    </div>
+
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="label">Datasets</div>
-        <div class="value" id="stat-datasets">--</div>
+        <div class="label">CEPC Datasets</div>
+        <div class="value" id="stat-cepc">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">HIAF Datasets</div>
+        <div class="value" id="stat-hiaf">0</div>
       </div>
       <div class="stat-card">
         <div class="label">Analyses</div>
@@ -109,6 +119,15 @@
           <div class="form-group">
             <label>File Path</label>
             <input type="text" id="ds-path" placeholder="/data/cepc/sim/higgs_zz.root">
+          </div>
+          <div class="form-group">
+            <label>Facility</label>
+            <select id="ds-facility">
+              <option value="CEPC">CEPC (e+e- Collider)</option>
+              <option value="HIAF">HIAF (Heavy-Ion Accelerator)</option>
+              <option value="LHC">LHC</option>
+              <option value="OTHER">Other</option>
+            </select>
           </div>
           <div class="form-group">
             <label>Format</label>
@@ -186,13 +205,15 @@
     document.body.addEventListener('htmx:configRequest', (e) => {
       if (e.detail.elt.matches('[hx-post*="ingest"]')) {
         e.detail.headers['Content-Type'] = 'application/json';
+        const facility = document.getElementById('ds-facility').value;
         e.detail.body = JSON.stringify({
           name: document.getElementById('ds-name').value,
           file_path: document.getElementById('ds-path').value,
           format: document.getElementById('ds-format').value,
-          process: 'e+e- > HZZ',
-          energy: '240 GeV',
-          generator: 'Whizard 2.8.4'
+          facility: facility,
+          process: facility === 'HIAF' ? 'Heavy-ion collision' : 'e+e- > HZZ',
+          energy: facility === 'HIAF' ? 'Variable' : '240 GeV',
+          generator: facility === 'HIAF' ? 'HIAF accelerator' : 'Whizard 2.8.4'
         });
       }
     });
